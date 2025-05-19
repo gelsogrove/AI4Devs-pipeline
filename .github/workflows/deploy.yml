@@ -34,7 +34,6 @@ jobs:
             cd /home/ubuntu/myproject
             npx prisma migrate deploy --schema=backend/prisma/schema.prisma
             npm run prisma:generate --prefix backend
-            npm run seed --prefix backend
             echo "Production DB ready. Deploying app..."
           '
           echo "Deployment to EC2 completed successfully."
