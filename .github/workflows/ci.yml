@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize]
+
+jobs:
+  integration-e2e:
+    name: Integration and E2E Tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: testdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres" --health-interval=10s --health-timeout=5s --health-retries=5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/testdb
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install backend dependencies
+        run: npm ci --prefix backend
+      - name: Install frontend dependencies
+        run: npm ci --prefix frontend
+      - name: Install wait-on
+        run: npm install -g wait-on
+      - name: Wait for PostgreSQL
+        run: |
+          until pg_isready -h localhost -p 5432 -U postgres; do sleep 1; done
+      - name: Run Prisma migrations
+        run: npx prisma migrate deploy --schema=backend/prisma/schema.prisma
+      - name: Run Prisma generate
+        run: npm run prisma:generate --prefix backend
+      - name: Run database seeds
+        run: npm run seed --prefix backend
+      - name: Lint backend
+        run: npm run lint --prefix backend
+      - name: Build backend
+        run: npm run build --prefix backend
+      - name: Lint frontend
+        run: npm run lint --prefix frontend
+      - name: Build frontend
+        run: npm run build --prefix frontend
+      - name: Start backend
+        run: npm start --prefix backend &
+      - name: Start frontend
+        run: npm start --prefix frontend &
+      - name: Wait for servers to be ready
+        run: wait-on http://localhost:3000 http://localhost:3010
+      - name: Run E2E tests
+        run: npm run cypress:run --prefix frontend
